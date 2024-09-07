@@ -365,6 +365,11 @@ func (c *Client) idle(subsystems ...string) ([]string, error) {
 	return c.Command("idle %s", Quoted(strings.Join(subsystems, " "))).Strings("changed")
 }
 
+func (c *Client) Idle(subsystems ...string) ([]string, error) {
+	return c.Command("idle %s", Quoted(strings.Join(subsystems, " "))).Strings("changed")
+}
+
+
 func (c *Client) noIdle() (err error) {
 	id, err := c.cmd("noidle")
 	if err == nil {
@@ -749,6 +754,37 @@ func (c *Client) ListInfo(uri string) ([]Attrs, error) {
 	return attrs, nil
 }
 
+// ListInfo lists the contents of the directory URI using MPD's lsinfo command.
+func (c *Client) ListFiles(uri string) ([]Attrs, error) {
+	id, err := c.cmd("listfiles %s", quote(uri))
+	if err != nil {
+		return nil, err
+	}
+	c.text.StartResponse(id)
+	defer c.text.EndResponse(id)
+	attrs := []Attrs{}
+	for {
+		line, err := c.readLine()
+		if err != nil {
+			return nil, err
+		}
+		if line == "OK" {
+			break
+		}
+		if strings.HasPrefix(line, "file: ") ||
+			strings.HasPrefix(line, "directory: ") ||
+			strings.HasPrefix(line, "playlist: ") {
+			attrs = append(attrs, Attrs{})
+		}
+		i := strings.Index(line, ": ")
+		if i < 0 {
+			return nil, textproto.ProtocolError("can't parse line: " + line)
+		}
+		attrs[len(attrs)-1][strings.ToLower(line[0:i])] = line[i+2:]
+	}
+	return attrs, nil
+}
+
 // ReadComments reads "comments" (audio metadata) from the song URI using
 // MPD's readcomments command.
 func (c *Client) ReadComments(uri string) (Attrs, error) {
@@ -800,6 +836,37 @@ func (c *Client) List(args ...string) ([]string, error) {
 	}
 	return ret, nil
 }
+
+// List searches the database for your query. You can use something simple like
+// `artist` for your search, or something like `artist album <Album Name>` if
+// you want the artist that has an album with a specified album name.
+func (c *Client) Count(args ...string) ([]string, error) {
+	id, err := c.cmd("count " + quoteArgs(args))
+	if err != nil {
+		return nil, err
+	}
+	c.text.StartResponse(id)
+	defer c.text.EndResponse(id)
+
+	var ret []string
+	for {
+		line, err := c.readLine()
+		if err != nil {
+			return nil, err
+		}
+
+		i := strings.Index(line, ": ")
+		if i > 0 {
+			ret = append(ret, line[i+2:])
+		} else if line == "OK" {
+			break
+		} else {
+			return nil, textproto.ProtocolError("can't parse line: " + line)
+		}
+	}
+	return ret, nil
+}
+
 
 // Partition commands
 
