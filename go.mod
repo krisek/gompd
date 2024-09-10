@@ -1,3 +1,3 @@
-module github.com/krisek/gompd/v2
+module github.com/krisek/gompd
 
 go 1.11
